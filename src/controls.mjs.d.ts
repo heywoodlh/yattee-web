@@ -1,0 +1,1 @@
+declare module '../controls.mjs' { export const defaultControls: any; export function configureControls(existing: any, input: any): any; export function verifyPin(controls: any, pin: string): boolean; export function publicControls(controls: any): any; }
