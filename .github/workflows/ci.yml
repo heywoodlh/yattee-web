@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test application
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - run: npm run check
+      - run: npm run build
+      - run: node --check server.mjs
+      - run: git diff --check
+
+  container-smoke:
+    name: Build and smoke-test container
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - run: docker build --tag yattee-web:test .
+      - run: |
+          set -euo pipefail
+          docker run --detach --rm --name yattee-web-ci --publish 18080:8080 --env YATTEE_SERVER_URL=http://127.0.0.1:9 --tmpfs /data yattee-web:test
+          cleanup() { docker stop yattee-web-ci >/dev/null || true; }
+          trap cleanup EXIT
+          attempt=0
+          until curl --fail --silent http://127.0.0.1:18080/ >/dev/null; do
+            attempt=$((attempt + 1))
+            if [ "$attempt" -ge 30 ]; then exit 1; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:18080/ | grep -q '<div id="root">'
+          curl --fail --silent http://127.0.0.1:18080/sw.js | grep -q 'yattee-web-shell'
+          curl --fail --silent http://127.0.0.1:18080/session | jq -e '.remote | type == "boolean"' >/dev/null
