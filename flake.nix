@@ -5,7 +5,7 @@
 
   outputs = { self, nixpkgs }:
     let
-      systems = [ "x86_64-linux" "aarch64-linux" ];
+      systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
     in {
       packages = forAllSystems (system:
@@ -74,7 +74,7 @@
             '';
             meta = {
               mainProgram = "yattee-web";
-              platforms = pkgs.lib.platforms.linux;
+              platforms = pkgs.lib.platforms.unix;
             };
           };
         });

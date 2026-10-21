@@ -29,11 +29,11 @@ The flake exposes `yattee-web` as the default package and app:
 nix run github:heywoodlh/yattee-web
 ```
 
-The Nix launcher stores persistent state in `YATTEE_WEB_DATA_DIR` (default: `./data`) and listens on port 8080.
+The flake supports x86_64 Linux, ARM64 Linux, and ARM64 macOS. The Nix launcher stores persistent state in `YATTEE_WEB_DATA_DIR` (default: `./data`) and listens on port 8080.
 
 ## Deployment
 
-`Dockerfile` produces the deployable image. On merges to `main`, `.github/workflows/publish.yml` publishes `latest`, the package version, and a commit-SHA tag to GHCR. Pull requests into `main` run `.github/workflows/ci.yml`; they do not publish images.
+`Dockerfile` produces the deployable image. On merges to `main`, `.github/workflows/publish.yml` publishes multi-architecture `linux/amd64` and `linux/arm64` manifests for `latest`, the package version, and a commit-SHA tag to GHCR. Pull requests into `main` run `.github/workflows/ci.yml`; they do not publish images.
 
 For the existing Kubernetes sandbox, build and push the current `0.1.0` image only after all local checks pass, then restart `sandbox/yattee-web` and verify the running Pod serves the expected client asset. Do not modify production Kubernetes or `nixos-configs` without explicit authorization.
 
