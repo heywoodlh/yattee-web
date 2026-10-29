@@ -1,6 +1,6 @@
 import type { FeedCache } from './feed-cache';
 
-export type Video = { type?: string; videoId: string; title: string; author: string; authorId: string; lengthSeconds?: number; liveNow?: boolean; viewCount?: number; publishedText?: string; videoThumbnails?: { url: string }[]; videoUrl?: string; originalUrl?: string; resume?: number; watched?: boolean };
+export type Video = { type?: string; videoId: string; title: string; author: string; authorId: string; lengthSeconds?: number; liveNow?: boolean; viewCount?: number; publishedText?: string; videoThumbnails?: { url: string }[]; videoUrl?: string; originalUrl?: string; resume?: number; paused?: boolean; watched?: boolean };
 export type Channel = { authorId: string; author: string; description?: string; subCount?: number; authorThumbnails?: { url: string }[]; originalUrl?: string; authorUrl?: string; channelUrl?: string };
 export type Playlist = { playlistId: string; title: string; author?: string; videoCount?: number; playlistThumbnail?: string; videos?: Video[] };
 export type Theme = 'default' | 'light' | 'nord' | 'catppuccin-mocha' | 'solarized' | 'dracula';

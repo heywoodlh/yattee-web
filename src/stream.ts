@@ -7,12 +7,23 @@ export type StreamFormat = {
   qualityLabel?: string;
   resolution?: string;
   fps?: number | string;
+  audioQuality?: string;
 };
 
 export type PlayableVideo = {
   hlsUrl?: string;
   formatStreams?: StreamFormat[];
+  adaptiveFormats?: StreamFormat[];
 };
+
+export function playableVideoFormats(video: PlayableVideo): StreamFormat[] {
+  return [...(video.formatStreams || []), ...(video.adaptiveFormats || []).filter(format => format.type?.startsWith('video/') || !!format.resolution)];
+}
+
+export function chooseAudioSource(video: PlayableVideo, selectedItag: string): string | undefined {
+  if (selectedItag === 'auto' || video.formatStreams?.some(format => format.itag === selectedItag)) return undefined;
+  return video.adaptiveFormats?.find(format => format.type?.startsWith('audio/'))?.url;
+}
 
 export function streamQualityLabel(format: StreamFormat): string {
   const resolution = format.resolution || format.quality || format.qualityLabel || format.itag;
@@ -44,7 +55,7 @@ export function choosePlaybackSource(
   supportsNativeHls: boolean,
   selectedItag: string,
 ): string | undefined {
-  const formats = video.formatStreams || [];
+  const formats = playableVideoFormats(video);
   if (selectedItag !== 'auto') return formats.find(format => format.itag === selectedItag)?.url;
   if (supportsNativeHls && video.hlsUrl) return video.hlsUrl;
   return formats.find(format => format.type?.startsWith('video/mp4') || format.container === 'mp4')?.url

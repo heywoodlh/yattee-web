@@ -51,3 +51,25 @@ jobs:
             if [ "$attempt" -ge 30 ]; then exit 1; fi
             sleep 1
           done
+
+  upstream-fixture:
+    name: Exercise proxy against a Yattee Server fixture
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - run: docker build --tag yattee-web:test .
+      - run: |
+          set -euo pipefail
+          docker network create yattee-ci
+          docker run --detach --rm --name yattee-fixture --network yattee-ci --network-alias fixture --mount type=bind,src="$PWD/tests",dst=/tests,readonly node:22-alpine node /tests/yattee-server-fixture.mjs
+          docker run --detach --rm --name yattee-web-fixture --network yattee-ci --publish 18081:8080 --env YATTEE_SERVER_URL=http://fixture:8085 --tmpfs /data yattee-web:test
+          cleanup() { docker rm -f yattee-web-fixture yattee-fixture >/dev/null 2>&1 || true; docker network rm yattee-ci >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          attempt=0
+          until curl --fail --silent http://127.0.0.1:18081/api/v1/videos/abcdefghijk | jq -e '.title == "Fixture video"' >/dev/null; do
+            attempt=$((attempt + 1))
+            if [ "$attempt" -ge 30 ]; then exit 1; fi
+            sleep 1
+          done
+          curl --fail --silent 'http://127.0.0.1:18081/api/v1/search?q=fixture&type=video' | jq -e '.[0].videoId == "abcdefghijk"' >/dev/null
