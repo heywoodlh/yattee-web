@@ -6,8 +6,8 @@ describe('upstreamShareUrl', () => {
     expect(upstreamShareUrl({ videoId: 'abc', originalUrl: 'https://www.youtube.com/watch?v=abc' })).toBe('https://www.youtube.com/watch?v=abc');
   });
 
-  it('does not invent a provider URL when the upstream did not supply one', () => {
-    expect(upstreamShareUrl({ videoId: 'abc' })).toBeUndefined();
+  it('uses the canonical YouTube URL when the upstream omits a provider URL', () => {
+    expect(upstreamShareUrl({ videoId: 'abcdefghijk' })).toBe('https://www.youtube.com/watch?v=abcdefghijk');
   });
 });
 

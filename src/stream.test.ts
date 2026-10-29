@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chooseDownloadSource, choosePlaybackSource, proxyPlaybackUrl, requiresHlsJs, streamQualityLabel } from './stream';
+import { chooseAudioSource, chooseDownloadSource, choosePlaybackSource, playableVideoFormats, proxyPlaybackUrl, requiresHlsJs, streamQualityLabel } from './stream';
 
 describe('choosePlaybackSource', () => {
   const video = {
@@ -43,5 +43,14 @@ describe('choosePlaybackSource', () => {
   it('labels a format with both its resolution and frame rate', () => {
     expect(streamQualityLabel({ itag: '299', url: 'https://relay.example/1080p60.mp4', resolution: '1080p', fps: 60 })).toBe('1080p · 60 fps');
     expect(streamQualityLabel({ itag: '18', url: 'https://relay.example/360.mp4', quality: '360p' })).toBe('360p');
+  });
+
+  it('offers video-only adaptive renditions with a separately selected audio source', () => {
+    const adaptiveVideo = { itag: '299', url: 'https://relay.example/1080p60-video.mp4', type: 'video/mp4; codecs="avc1.640028"', resolution: '1080p', fps: 60 };
+    const adaptiveAudio = { itag: '140', url: 'https://relay.example/audio.m4a', type: 'audio/mp4; codecs="mp4a.40.2"' };
+    const source = { formatStreams: [{ itag: '18', url: 'https://relay.example/360.mp4', type: 'video/mp4; codecs="avc1,mp4a"' }], adaptiveFormats: [adaptiveVideo, adaptiveAudio] };
+    expect(playableVideoFormats(source)).toEqual([source.formatStreams[0], adaptiveVideo]);
+    expect(choosePlaybackSource(source, false, '299')).toBe(adaptiveVideo.url);
+    expect(chooseAudioSource(source, '299')).toBe(adaptiveAudio.url);
   });
 });

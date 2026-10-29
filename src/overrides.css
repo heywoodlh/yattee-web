@@ -1,0 +1,18 @@
+.notice-overlay {
+  position: fixed;
+  z-index: 100;
+  top: max(16px, env(safe-area-inset-top));
+  left: 50%;
+  width: min(680px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  box-shadow: 0 12px 32px #0008;
+}
+
+.player-actions { align-items: center; flex-wrap: wrap; }
+.player-actions > .actions { margin: 0; }
+.client-refresh { margin-left: auto; }
+
+@media (max-width: 720px) {
+  .client-refresh { padding: 8px 10px; font-size: 13px; }
+  .player-actions { gap: 8px; }
+}
