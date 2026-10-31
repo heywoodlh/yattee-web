@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-ignore Container-side module
-import { writeJsonAtomic } from '../atomic-state.mjs';
+import { writeFileAtomic, writeJsonAtomic } from '../atomic-state.mjs';
 
 describe('atomic state persistence', () => {
   it('accepts overlapping progress saves without a rename failure or corrupt state', async () => {
@@ -16,6 +16,17 @@ describe('atomic state persistence', () => {
       await expect(Promise.all(Array.from({ length: 25 }, (_, resume) => writeJsonAtomic(target, { resume })))).resolves.toHaveLength(25);
       const persisted = JSON.parse(await readFile(target, 'utf8'));
       expect(persisted.resume).toEqual(expect.any(Number));
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('writes raw bytes atomically with owner-only permissions', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'yattee-web-state-'));
+    const target = path.join(directory, 'nested', 'session.key');
+    try {
+      await writeFileAtomic(target, new Uint8Array([0, 1, 2, 255]));
+      expect([...await readFile(target)]).toEqual([0, 1, 2, 255]);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
