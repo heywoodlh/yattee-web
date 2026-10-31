@@ -31,6 +31,7 @@
             cp -L ${./local-upstream-session.mjs} "$out/local-upstream-session.mjs"
             cp -L ${./profile-key.mjs} "$out/profile-key.mjs"
             cp -L ${./atomic-state.mjs} "$out/atomic-state.mjs"
+            cp -L ${./request-safety.mjs} "$out/request-safety.mjs"
           '';
           nginxConfig = pkgs.writeText "yattee-web-nginx.conf" ''
             pid nginx.pid;
@@ -45,10 +46,11 @@
                 server_name _;
                 root ${webRoot};
                 index index.html;
+                add_header X-Content-Type-Options "nosniff" always; add_header Content-Security-Policy "frame-ancestors 'none'" always;
                 location ^~ /download { proxy_pass http://127.0.0.1:3000; proxy_http_version 1.1; proxy_set_header Host $host; proxy_set_header Authorization $http_authorization; }
                 location ^~ /stream { proxy_pass http://127.0.0.1:3000; proxy_http_version 1.1; proxy_set_header Host $host; proxy_set_header Authorization $http_authorization; }
                 location ~ ^/(state$|session$|local-admin(?:/|$)|controls(?:/|$)|subscriptions/import$|web-admin/|config(?:/|$)|api/|proxy/|health$|info$|setup$|login$|upstream-login$|logout$|admin$|watch$|static/) { proxy_pass http://127.0.0.1:3000; proxy_http_version 1.1; proxy_set_header Host $host; proxy_set_header Authorization $http_authorization; }
-                location = /index.html { add_header Cache-Control "no-cache"; }
+                location = /index.html { add_header Cache-Control "no-cache"; add_header X-Content-Type-Options "nosniff" always; add_header Content-Security-Policy "frame-ancestors 'none'" always; }
                 location / { try_files $uri $uri/ /index.html; }
               }
             }
@@ -62,15 +64,19 @@
               runtime_dir="$(mktemp -d)"
               cleanup() {
                 if [ -n "''${server_pid:-}" ]; then kill "$server_pid" 2>/dev/null || true; fi
+                if [ -f "$runtime_dir/nginx.pid" ]; then kill "$(cat "$runtime_dir/nginx.pid")" 2>/dev/null || true; fi
                 rm -rf "$runtime_dir"
               }
-              trap cleanup EXIT INT TERM
+              trap cleanup EXIT
+              trap 'exit 0' INT TERM
               mkdir -p "$data_dir"
               chmod 700 "$data_dir"
               export YATTEE_WEB_DATA_DIR="$data_dir"
               node ${serverRoot}/server.mjs &
               server_pid=$!
-              nginx -g 'daemon off;' -c ${nginxConfig} -p "$runtime_dir" | cat
+              nginx -g 'daemon off;' -c ${nginxConfig} -p "$runtime_dir" | cat &
+              nginx_pid=$!
+              wait -n "$server_pid" "$nginx_pid"
             '';
             meta = {
               mainProgram = "yattee-web";
