@@ -70,7 +70,7 @@
               export YATTEE_WEB_DATA_DIR="$data_dir"
               node ${serverRoot}/server.mjs &
               server_pid=$!
-              nginx -g 'daemon off;' -c ${nginxConfig} -p "$runtime_dir"
+              nginx -g 'daemon off;' -c ${nginxConfig} -p "$runtime_dir" | cat
             '';
             meta = {
               mainProgram = "yattee-web";
