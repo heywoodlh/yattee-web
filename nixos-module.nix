@@ -27,6 +27,11 @@ in
         first start instead of leaving it to the first visitor.
       '';
     };
+    secureCookies = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Whether to mark session cookies `Secure`. Enable when Yattee Web is served over HTTPS.";
+    };
     openFirewall = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -43,6 +48,7 @@ in
       environment = {
         YATTEE_SERVER_URL = cfg.serverUrl;
         YATTEE_WEB_DATA_DIR = "/var/lib/yattee-web";
+        YATTEE_WEB_SECURE_COOKIES = if cfg.secureCookies then "1" else "0";
       };
       serviceConfig = {
         ExecStart = lib.getExe cfg.package;
