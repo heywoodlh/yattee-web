@@ -15,7 +15,7 @@
             pname = "yattee-web-assets";
             version = "0.1.0";
             src = self;
-            npmDepsHash = "sha256-oaDaeFWG4kjImE9ZdnJFxkSx5Qk6DOP54aVsdocJvcE=";
+            npmDepsHash = "sha256-D1n48n1aNYHwM0yOt7Z8J5phV/LqZ7gHYbSYlmyEVU4=";
             installPhase = ''
               runHook preInstall
               mkdir -p "$out"
@@ -78,6 +78,7 @@
             };
           };
         });
+      nixosModules.default = import ./nixos-module.nix self;
       apps = forAllSystems (system: {
         default = {
           type = "app";
