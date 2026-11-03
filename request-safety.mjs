@@ -11,11 +11,22 @@ export function upstreamTarget(requestUrl, base) {
   return target;
 }
 
+// Upstream servers route on the decoded path, so check controls against it
+// rather than the raw percent-encoded form.
+export function routedPath(url) {
+  let pathname = url.pathname;
+  try { pathname = decodeURIComponent(pathname); } catch {}
+  return pathname.replace(/\/{2,}/g, '/');
+}
+
+export const isSearchPath = url => routedPath(url).startsWith('/api/v1/search');
+
 export function mediaTarget(source, configuredOrigin) {
   const target = new URL(source);
   if (target.protocol !== 'https:' && target.protocol !== 'http:') throw new Error('Unsupported media host');
   const trustedGoogle = target.protocol === 'https:' && (target.hostname === 'manifest.googlevideo.com' || target.hostname.endsWith('.googlevideo.com'));
   if (!trustedGoogle && target.origin !== configuredOrigin) throw new Error('Unsupported media host');
+  if (target.origin === configuredOrigin && isSearchPath(target)) throw new Error('Unsupported media host');
   return target;
 }
 
