@@ -58,6 +58,15 @@ describe('cross-site request protection', () => {
     expect(isCrossSiteWrite('POST', {})).toBe(false);
   });
 
+  it('falls back to comparing Origin with Host when fetch metadata is missing', () => {
+    expect(isCrossSiteWrite('POST', { origin: 'https://evil.example', host: 'yattee.example' })).toBe(true);
+    expect(isCrossSiteWrite('POST', { origin: 'null', host: 'yattee.example' })).toBe(true);
+    expect(isCrossSiteWrite('POST', { origin: 'https://yattee.example', host: 'yattee.example' })).toBe(false);
+    expect(isCrossSiteWrite('POST', { origin: 'http://192.168.1.5:8080', host: '192.168.1.5' })).toBe(false);
+    expect(isCrossSiteWrite('POST', { origin: 'https://evil.example', host: undefined })).toBe(true);
+    expect(isCrossSiteWrite('POST', { 'sec-fetch-site': 'same-origin', origin: 'https://other.example', host: 'yattee.example' })).toBe(false);
+  });
+
   it('accepts only JSON request bodies', () => {
     expect(isJsonRequest({ 'content-type': 'application/json' })).toBe(true);
     expect(isJsonRequest({ 'content-type': 'application/json; charset=utf-8' })).toBe(true);

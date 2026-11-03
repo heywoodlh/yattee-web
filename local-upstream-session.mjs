@@ -19,3 +19,13 @@ export function decryptAuthorization(encrypted, key) {
 export function sessionRecord(token, authorization, key, now = Date.now()) {
   return { tokenHash: tokenHash(token), expiresAt: now + localSessionLifetimeSeconds * 1000, authorization: encryptAuthorization(authorization, key) };
 }
+
+// Accepts a 32-byte AES key as raw bytes, 64 hex characters, or base64.
+export function parseSessionKey(raw) {
+  const bytes = Buffer.from(raw);
+  const text = bytes.toString('utf8').trim();
+  if (/^[0-9a-fA-F]{64}$/.test(text)) return Buffer.from(text, 'hex');
+  const decoded = /^[A-Za-z0-9+/_-]+={0,2}$/.test(text) ? Buffer.from(text, 'base64') : Buffer.alloc(0);
+  if (decoded.length === 32) return decoded;
+  return bytes.length === 32 ? bytes : null;
+}

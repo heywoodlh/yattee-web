@@ -4,7 +4,7 @@ import http from 'node:http';
 import https from 'node:https';
 import path from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
-import { decryptAuthorization, localSessionLifetimeSeconds, sessionRecord, tokenHash } from './local-upstream-session.mjs';
+import { decryptAuthorization, localSessionLifetimeSeconds, parseSessionKey, sessionRecord, tokenHash } from './local-upstream-session.mjs';
 import { configureControls, defaultControls, enforceControls, publicControls, verifyPin } from './controls.mjs';
 import { createAttemptLimiter } from './credentials.mjs';
 import { adminIdentity, configuredAdmin, proxyAuthorization, shouldForwardUpstreamAuthorization, upgradedAdmin } from './admin-auth.mjs';
@@ -34,7 +34,16 @@ const parseBody = request => new Promise((resolve, reject) => { if (!isJsonReque
 const statePathFor = identity => identity ? path.join(dataDir, 'users', `${createHash('sha256').update(identity).digest('hex')}.json`) : localStatePath;
 const upstreamAuth = request => typeof request.headers.authorization === 'string' && request.headers.authorization.startsWith('Basic ') ? request.headers.authorization : '';
 const cookieValue = (request, name) => new RegExp(`(?:^|;\\s*)${name}=([^;]+)`).exec(String(request.headers.cookie || ''))?.[1] || '';
-async function localSessionKey() { try { const key = await fs.readFile(localSessionKeyPath); if (key.length === 32) return key; } catch {} const key = randomBytes(32); await writeFileAtomic(localSessionKeyPath, key); return key; }
+const externalSessionKeyPath = process.env.YATTEE_WEB_SESSION_KEY_FILE || (process.env.CREDENTIALS_DIRECTORY ? path.join(process.env.CREDENTIALS_DIRECTORY, 'session-key') : '');
+async function externalSessionKey() {
+  if (!externalSessionKeyPath) return null;
+  let raw;
+  try { raw = await fs.readFile(externalSessionKeyPath); } catch (error) { if (error.code === 'ENOENT' && !process.env.YATTEE_WEB_SESSION_KEY_FILE) return null; throw error; }
+  const key = parseSessionKey(raw);
+  if (!key) throw new Error(`${externalSessionKeyPath} must contain a 32-byte key (raw, hex, or base64)`);
+  return key;
+}
+async function localSessionKey() { const external = await externalSessionKey(); if (external) return external; try { const key = await fs.readFile(localSessionKeyPath); if (key.length === 32) return key; } catch {} const key = randomBytes(32); await writeFileAtomic(localSessionKeyPath, key); return key; }
 async function localSessions() { try { const sessions = JSON.parse(await fs.readFile(localSessionsPath, 'utf8')); return Array.isArray(sessions) ? sessions.filter(session => session?.expiresAt > Date.now()) : []; } catch { return []; } }
 async function saveLocalSessions(sessions) { await writeJsonAtomic(localSessionsPath, sessions); }
 async function localSessionAuthorization(request) { const token = cookieValue(request, 'yattee_web_local_session'); if (!token) return ''; const sessions = await localSessions(); const session = sessions.find(item => item.tokenHash === tokenHash(token)); if (!session) return ''; try { return decryptAuthorization(session.authorization, await localSessionKey()); } catch { return ''; } }

@@ -41,11 +41,17 @@ export const isProfileKey = value => typeof value === 'string' && /^[a-f0-9]{64}
 
 const unsafeMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-// Browsers send Sec-Fetch-Site on every request; native clients and older
-// browsers omit it, so only an explicit cross-origin value is rejected.
+// Browsers send Sec-Fetch-Site on every request. Older browsers omit it but
+// still send Origin on cross-origin writes, so fall back to comparing that
+// with Host. Only hostnames are compared, because nginx forwards Host without
+// the port. Native clients send neither header and are allowed.
 export function isCrossSiteWrite(method, headers) {
+  if (!unsafeMethods.has(String(method).toUpperCase())) return false;
   const site = headers['sec-fetch-site'];
-  return unsafeMethods.has(String(method).toUpperCase()) && (site === 'cross-site' || site === 'same-site');
+  if (site) return site === 'cross-site' || site === 'same-site';
+  const origin = headers.origin;
+  if (!origin) return false;
+  try { return new URL(origin).hostname !== new URL(`http://${headers.host}`).hostname; } catch { return true; }
 }
 
 export const isJsonRequest = headers => /^application\/json(?:\s*;|$)/i.test(String(headers['content-type'] || ''));
