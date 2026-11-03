@@ -8,6 +8,17 @@ function isStaticAsset(pathname) {
   return shell.includes(pathname) || pathname.startsWith('/assets/');
 }
 
+// The app routes with the URL hash, so its only page loads are / and
+// /index.html. Other navigations (/upstream-login, /download, ...) are
+// server routes and must reach the network untouched.
+function isAppPage(pathname) {
+  return pathname === '/' || pathname === '/index.html';
+}
+
+function isAppShell(response) {
+  return response.ok && (response.headers.get('content-type') || '').includes('text/html');
+}
+
 async function precacheAppShell(cache) {
   const response = await fetch('/index.html', { cache: 'reload' });
   if (!response.ok) throw new Error(`Unable to cache app shell (${response.status})`);
@@ -25,9 +36,9 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== location.origin) return;
-  if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
+  if (isAppPage(url.pathname)) {
     event.respondWith(caches.match('/index.html').then(cached => {
-      const network = fetch(event.request).then(response => { const copy = response.clone(); caches.open(CACHE).then(cache => cache.put('/index.html', copy)); return response; });
+      const network = fetch(event.request).then(response => { if (isAppShell(response)) { const copy = response.clone(); caches.open(CACHE).then(cache => cache.put('/index.html', copy)); } return response; });
       return cached || network;
     }));
     return;

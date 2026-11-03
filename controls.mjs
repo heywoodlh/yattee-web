@@ -18,7 +18,7 @@ export function publicControls(controls = defaultControls) { const { pinHash, ..
 
 const lockedFields = controls => [
   ...(controls?.enabled && controls.disableSubscriptions ? ['subscriptions'] : []),
-  ...(controls?.enabled && controls.disablePlaylists ? ['bookmarks', 'playlists'] : []),
+  ...(controls?.enabled && controls.disablePlaylists ? ['bookmarks', 'playlists', 'queue'] : []),
 ];
 
 // Keep the fields that parental controls lock at their saved values, so a

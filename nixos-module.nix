@@ -70,6 +70,7 @@ in
         StateDirectoryMode = "0700";
         PrivateTmp = true;
         Restart = "always";
+        RestartSec = 5;
         UMask = "0077";
         CapabilityBoundingSet = "";
         AmbientCapabilities = "";
