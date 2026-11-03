@@ -31,6 +31,7 @@
             cp -L ${./local-upstream-session.mjs} "$out/local-upstream-session.mjs"
             cp -L ${./profile-key.mjs} "$out/profile-key.mjs"
             cp -L ${./atomic-state.mjs} "$out/atomic-state.mjs"
+            cp -L ${./request-safety.mjs} "$out/request-safety.mjs"
           '';
           nginxConfig = pkgs.writeText "yattee-web-nginx.conf" ''
             pid nginx.pid;
@@ -62,15 +63,19 @@
               runtime_dir="$(mktemp -d)"
               cleanup() {
                 if [ -n "''${server_pid:-}" ]; then kill "$server_pid" 2>/dev/null || true; fi
+                if [ -f "$runtime_dir/nginx.pid" ]; then kill "$(cat "$runtime_dir/nginx.pid")" 2>/dev/null || true; fi
                 rm -rf "$runtime_dir"
               }
-              trap cleanup EXIT INT TERM
+              trap cleanup EXIT
+              trap 'exit 0' INT TERM
               mkdir -p "$data_dir"
               chmod 700 "$data_dir"
               export YATTEE_WEB_DATA_DIR="$data_dir"
               node ${serverRoot}/server.mjs &
               server_pid=$!
-              nginx -g 'daemon off;' -c ${nginxConfig} -p "$runtime_dir" | cat
+              nginx -g 'daemon off;' -c ${nginxConfig} -p "$runtime_dir" | cat &
+              nginx_pid=$!
+              wait -n "$server_pid" "$nginx_pid"
             '';
             meta = {
               mainProgram = "yattee-web";
