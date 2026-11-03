@@ -9,6 +9,9 @@ export const searchFilters: { value: SearchFilter; label: string }[] = [
 export function searchRequestType(filter: SearchFilter): 'all' | 'video' | 'channel' | 'playlist' {
   return filter === 'topics' || filter === 'channels' ? 'channel' : filter === 'videos' ? 'video' : filter === 'playlists' ? 'playlist' : 'all';
 }
+export function searchQuery(query: string, filter: SearchFilter): string {
+  return filter === 'topics' && !/\s[-–]?\sTopic$/i.test(query) ? `${query} Topic` : query;
+}
 export function searchRoute(query: string, filter: SearchFilter): string {
   return `search/${filter}${query.trim() ? `/${encodeURIComponent(query.trim())}` : ''}`;
 }
@@ -21,7 +24,7 @@ export function visibleSearchResults(results: (Video | Channel | Playlist)[], fi
   if (filter === 'all') return results;
   if (filter === 'videos') return results.filter(item => 'videoId' in item);
   if (filter === 'playlists') return results.filter(item => 'playlistId' in item);
-  const channels = results.filter((item): item is Channel => 'authorId' in item && !('videoId' in item));
+  const channels = results.filter((item): item is Channel => 'authorId' in item && !('videoId' in item) && !('playlistId' in item));
   return filter === 'topics' ? channels.filter(item => /\s[-–]\sTopic$/i.test(item.author)) : channels;
 }
 

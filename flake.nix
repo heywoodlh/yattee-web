@@ -13,9 +13,9 @@
           pkgs = import nixpkgs { inherit system; };
           webRoot = pkgs.buildNpmPackage {
             pname = "yattee-web-assets";
-            version = "0.1.0";
+            version = "0.2.0";
             src = self;
-            npmDepsHash = "sha256-D1n48n1aNYHwM0yOt7Z8J5phV/LqZ7gHYbSYlmyEVU4=";
+            npmDepsHash = "sha256-BiIDL5K0i4onF3dnQjlxxAjnMJvo8JJYZcD+9O+KM4M=";
             installPhase = ''
               runHook preInstall
               mkdir -p "$out"
@@ -32,6 +32,7 @@
             cp -L ${./profile-key.mjs} "$out/profile-key.mjs"
             cp -L ${./atomic-state.mjs} "$out/atomic-state.mjs"
             cp -L ${./request-safety.mjs} "$out/request-safety.mjs"
+            cp -L ${./sponsorblock-server.mjs} "$out/sponsorblock-server.mjs"
           '';
           nginxConfig = pkgs.writeText "yattee-web-nginx.conf" ''
             pid nginx.pid;

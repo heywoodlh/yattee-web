@@ -10,7 +10,7 @@ import { adminIdentity, configuredAdmin, proxyAuthorization, shouldForwardUpstre
 import { profileKey } from './profile-key.mjs';
 import { writeJsonAtomic } from './atomic-state.mjs';
 import { isProfileKey, mediaResponseHeaders, mediaTarget, upstreamTarget } from './request-safety.mjs';
-import { getSponsorSegments, normalizeServerSponsorSettings, sponsorVideoID } from './sponsorblock-server.mjs';
+import { createSponsorSegmentService, normalizeServerSponsorSettings, sponsorVideoID } from './sponsorblock-server.mjs';
 
 const dataDir = process.env.YATTEE_WEB_DATA_DIR || '/data';
 const configPath = path.join(dataDir, 'server.json');
@@ -193,6 +193,7 @@ async function proxy(request, response, configOverride) {
 
 async function sessionFailure(response, session) { return session.error === 'local-auth' ? localAdminChallenge(response) : challenge(response); }
 
+const sponsorSegments = createSponsorSegmentService();
 await initializeLocalAdmin();
 http.createServer(async (request, response) => {
   try {
@@ -200,8 +201,8 @@ http.createServer(async (request, response) => {
       if (request.method !== 'GET') return send(response, 405, { detail: 'Method not allowed' });
       const videoID = new URL(request.url, 'http://localhost').searchParams.get('videoID');
       if (!sponsorVideoID(videoID)) return send(response, 400, { detail: 'Invalid video ID' });
-      try { return send(response, 200, { segments: await getSponsorSegments(videoID) }, { 'cache-control': 'private, max-age=300' }); }
-      catch { return send(response, 502, { detail: 'SponsorBlock is unavailable' }); }
+      try { return send(response, 200, { segments: await sponsorSegments(videoID) }, { 'cache-control': 'private, max-age=300' }); }
+      catch (error) { return send(response, error?.message === 'SponsorBlock rate limit exceeded' ? 429 : 502, { detail: error?.message === 'SponsorBlock rate limit exceeded' ? 'SponsorBlock rate limit exceeded' : 'SponsorBlock is unavailable' }); }
     }
     if (request.url === '/local-admin/status' && request.method === 'GET') return send(response, 200, { configured: !!localAdmin?.passwordHash });
     if (request.url === '/local-admin/setup' && request.method === 'POST') { if (localAdmin?.passwordHash) return send(response, 409, { detail: 'Yattee Web admin password is already configured' }); const input = await parseBody(request); await writeLocalAdmin(configuredAdmin(input.password)); return send(response, 201, { configured: true }); }

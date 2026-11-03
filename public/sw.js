@@ -1,4 +1,4 @@
-const CACHE = 'yattee-web-shell-v8';
+const CACHE = 'yattee-web-shell-v9';
 const shell = ['/', '/manifest.webmanifest', '/icon.svg'];
 
 async function precacheAppShell(cache) {

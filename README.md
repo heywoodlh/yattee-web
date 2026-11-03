@@ -2,6 +2,12 @@
 
 Standalone web client for Yattee Server.
 
+## What's new in 0.2.0
+
+Search defaults to mixed video, channel, and playlist results. Use the All, Videos, Channels, Topics, and Playlists filters to narrow results; Topics shows channels whose names end in “- Topic.” The Channels page has a **Find channels to subscribe** button that searches Yattee Server without importing another user's subscriptions. Open a result and select **Subscribe** to add it to your own profile.
+
+SponsorBlock is available for YouTube videos, with the same five categories enabled by default as the Yattee iOS client. Manage automatic skipping and categories in **Settings → SponsorBlock**. When automatic skipping is off, use the player’s **Skip segment** button. Segments are fetched through a fixed-origin relay to `https://sponsor.ajay.app`; playback continues when that service is unavailable. Upstream Yattee Server credentials are never forwarded to SponsorBlock.
+
 # Docker
 
 ```yaml
