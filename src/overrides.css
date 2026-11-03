@@ -11,6 +11,8 @@
 .player-actions { align-items: center; flex-wrap: wrap; }
 .player-actions > .actions { margin: 0; }
 .client-refresh { margin-left: auto; }
+.search-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 22px; }
+.search-filters button { min-height: 38px; }
 
 @media (max-width: 720px) {
   .client-refresh { padding: 8px 10px; font-size: 13px; }
