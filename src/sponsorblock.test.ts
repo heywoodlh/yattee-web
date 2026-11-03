@@ -6,7 +6,7 @@ describe('SponsorBlock profile settings', () => {
   it('defaults legacy profiles to iOS-compatible categories and rejects malformed saved values', () => {
     expect(loadStore('{}').settings.sponsorBlock).toEqual(initialStore.settings.sponsorBlock);
     expect(initialStore.settings.sponsorBlock).toEqual({ enabled: true, autoSkip: true, categories: ['sponsor', 'selfpromo', 'interaction', 'intro', 'outro'] });
-    expect(loadStore(JSON.stringify({ settings: { sponsorBlock: { enabled: 'yes', autoSkip: false, categories: ['sponsor', 'bogus', 'sponsor'] } } })).settings.sponsorBlock)
+    expect(loadStore(JSON.stringify({ settings: { sponsorBlock: { enabled: 'yes', autoSkip: false, categories: ['sponsor', 'bogus', 'sponsor', 'poi_highlight'] } } })).settings.sponsorBlock)
       .toEqual({ enabled: true, autoSkip: false, categories: ['sponsor'] });
   });
 });

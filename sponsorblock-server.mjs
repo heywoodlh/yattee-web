@@ -1,5 +1,5 @@
 // The only outbound SponsorBlock target: never accept a client-provided host or path.
-const categories = ['sponsor', 'selfpromo', 'interaction', 'intro', 'outro', 'preview', 'music_offtopic', 'filler', 'poi_highlight'];
+const categories = ['sponsor', 'selfpromo', 'interaction', 'intro', 'outro', 'preview', 'music_offtopic', 'filler'];
 export const sponsorVideoID = value => typeof value === 'string' && /^[\w-]{11}$/.test(value);
 export function normalizeServerSponsorSettings(value) {
   const saved = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -7,6 +7,35 @@ export function normalizeServerSponsorSettings(value) {
     enabled: typeof saved.enabled === 'boolean' ? saved.enabled : true,
     autoSkip: typeof saved.autoSkip === 'boolean' ? saved.autoSkip : true,
     categories: Array.isArray(saved.categories) ? categories.filter(category => saved.categories.includes(category)) : categories.slice(0, 5),
+  };
+}
+
+export function createSponsorSegmentService(lookup = getSponsorSegments, now = Date.now, { ttlMs = 300000, capacity = 256, maxMisses = 120 } = {}) {
+  const cache = new Map();
+  const inFlight = new Map();
+  let misses = [];
+  return videoID => {
+    if (!sponsorVideoID(videoID)) return Promise.reject(new Error('Invalid video ID'));
+    const hit = cache.get(videoID);
+    if (hit && hit.expires > now()) {
+      cache.delete(videoID); cache.set(videoID, hit);
+      return Promise.resolve(hit.segments);
+    }
+    if (hit) cache.delete(videoID);
+    if (inFlight.has(videoID)) return inFlight.get(videoID);
+    misses = misses.filter(time => now() - time < 60000);
+    if (misses.length >= maxMisses) return Promise.reject(new Error('SponsorBlock rate limit exceeded'));
+    misses.push(now());
+    let request;
+    try { request = Promise.resolve(lookup(videoID)); }
+    catch (error) { return Promise.reject(error); }
+    const pending = request.then(segments => {
+      cache.set(videoID, { segments, expires: now() + ttlMs });
+      while (cache.size > capacity) cache.delete(cache.keys().next().value);
+      return segments;
+    }).finally(() => inFlight.delete(videoID));
+    inFlight.set(videoID, pending);
+    return pending;
   };
 }
 

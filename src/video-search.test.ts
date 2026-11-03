@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchingVideos, parseSearchRoute, searchRequestType, visibleSearchResults, searchRoute } from './video-search';
+import { matchingVideos, parseSearchRoute, searchRequestType, searchQuery, visibleSearchResults, searchRoute } from './video-search';
 import type { Channel, Playlist } from './store';
 
 const videos = [
@@ -19,12 +19,14 @@ describe('video search', () => {
     expect(searchRequestType('topics')).toBe('channel');
     expect(searchRequestType('channels')).toBe('channel');
     expect(searchRequestType('all')).toBe('all');
+    expect(searchQuery('Taylor Swift', 'topics')).toBe('Taylor Swift Topic');
+    expect(searchQuery('Taylor Swift - Topic', 'topics')).toBe('Taylor Swift - Topic');
   });
 
   it('shows only topic channels when requested without dropping regular channel results', () => {
     const channel: Channel = { authorId: 'UC3', author: 'Aster', authorThumbnails: [] };
     const topic: Channel = { authorId: 'UC4', author: 'Aster - Topic', authorThumbnails: [] };
-    const playlist: Playlist = { playlistId: 'PL1', title: 'Aster mix' };
+    const playlist: Playlist & { authorId: string } = { playlistId: 'PL1', title: 'Aster mix', authorId: 'UC3' };
     expect(visibleSearchResults([videos[0], channel, topic, playlist], 'topics')).toEqual([topic]);
     expect(visibleSearchResults([videos[0], channel, topic, playlist], 'channels')).toEqual([channel, topic]);
   });
