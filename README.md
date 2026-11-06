@@ -53,3 +53,5 @@ volumes:
 ```
 
 The service listens on port 8080 and stores its state in `/var/lib/yattee-web`.
+
+When Yattee Web is served over HTTPS, set `YATTEE_WEB_SECURE_COOKIES=1` (or `services.yattee-web.secureCookies = true`) to mark its session cookies `Secure`.

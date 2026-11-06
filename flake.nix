@@ -46,10 +46,11 @@
                 server_name _;
                 root ${webRoot};
                 index index.html;
+                add_header X-Content-Type-Options "nosniff" always; add_header Content-Security-Policy "frame-ancestors 'none'" always;
                 location ^~ /download { proxy_pass http://127.0.0.1:3000; proxy_http_version 1.1; proxy_set_header Host $host; proxy_set_header Authorization $http_authorization; }
                 location ^~ /stream { proxy_pass http://127.0.0.1:3000; proxy_http_version 1.1; proxy_set_header Host $host; proxy_set_header Authorization $http_authorization; }
                 location ~ ^/(state$|session$|local-admin(?:/|$)|controls(?:/|$)|subscriptions/import$|web-admin/|config(?:/|$)|api/|proxy/|health$|info$|setup$|login$|upstream-login$|logout$|admin$|watch$|static/) { proxy_pass http://127.0.0.1:3000; proxy_http_version 1.1; proxy_set_header Host $host; proxy_set_header Authorization $http_authorization; }
-                location = /index.html { add_header Cache-Control "no-cache"; }
+                location = /index.html { add_header Cache-Control "no-cache"; add_header X-Content-Type-Options "nosniff" always; add_header Content-Security-Policy "frame-ancestors 'none'" always; }
                 location / { try_files $uri $uri/ /index.html; }
               }
             }

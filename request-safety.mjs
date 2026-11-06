@@ -27,3 +27,18 @@ export function mediaResponseHeaders(headers) {
 }
 
 export const isProfileKey = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+
+const unsafeMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+// Browsers send Sec-Fetch-Site on every request; native clients and older
+// browsers omit it, so only an explicit cross-origin value is rejected.
+export function isCrossSiteWrite(method, headers) {
+  const site = headers['sec-fetch-site'];
+  return unsafeMethods.has(String(method).toUpperCase()) && (site === 'cross-site' || site === 'same-site');
+}
+
+export const isJsonRequest = headers => /^application\/json(?:\s*;|$)/i.test(String(headers['content-type'] || ''));
+
+export function stripOwnCookies(cookie) {
+  return String(cookie || '').split(';').map(part => part.trim()).filter(part => part && !part.startsWith('yattee_web_')).join('; ');
+}
