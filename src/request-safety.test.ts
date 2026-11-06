@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 // @ts-ignore Container-side module
-import { isCrossSiteWrite, isJsonRequest, isProfileKey, mediaResponseHeaders, mediaTarget, stripOwnCookies, upstreamTarget } from '../request-safety.mjs';
+import { isCrossSiteWrite, isJsonRequest, isProfileKey, isSearchPath, mediaResponseHeaders, mediaTarget, stripOwnCookies, upstreamTarget } from '../request-safety.mjs';
 
 describe('upstream request targets', () => {
   const base = 'http://yattee-server:8085';
@@ -26,7 +26,7 @@ describe('media relay targets', () => {
   });
 
   it('rejects other hosts and non-HTTP schemes', () => {
-    for (const source of ['http://10.0.0.7/', 'http://rr1.googlevideo.com/videoplayback', 'rtmp://rr1.googlevideo.com/live', 'file:///etc/passwd', 'https://googlevideo.com.example/']) {
+    for (const source of ['http://10.0.0.7/', 'http://rr1.googlevideo.com/videoplayback', 'rtmp://rr1.googlevideo.com/live', 'file:///etc/passwd', 'https://googlevideo.com.example/', 'http://yattee-server:8085/api/v1/search?q=a', 'http://yattee-server:8085/api/v1/%73earch?q=a']) {
       expect(() => mediaTarget(source, origin)).toThrow('Unsupported media host');
     }
   });
@@ -72,5 +72,18 @@ describe('proxied cookies', () => {
     expect(stripOwnCookies('yattee_web_local_session=abc; theme=dark; yattee_web_remote_profile=def')).toBe('theme=dark');
     expect(stripOwnCookies('yattee_web_local_session=abc')).toBe('');
     expect(stripOwnCookies(undefined)).toBe('');
+  });
+});
+
+describe('search path detection', () => {
+  it('matches search however the path is encoded', () => {
+    for (const path of ['/api/v1/search?q=a', '/api/v1/search/suggestions', '/api/v1/%73earch', '/api//v1///search', '/api/v1%2Fsearch']) {
+      expect(isSearchPath(new URL(path, 'http://yattee-server'))).toBe(true);
+    }
+  });
+
+  it('leaves other API paths alone', () => {
+    expect(isSearchPath(new URL('/api/v1/trending', 'http://yattee-server'))).toBe(false);
+    expect(isSearchPath(new URL('/api/v1/%zz', 'http://yattee-server'))).toBe(false);
   });
 });

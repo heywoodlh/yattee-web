@@ -32,6 +32,7 @@
             cp -L ${./profile-key.mjs} "$out/profile-key.mjs"
             cp -L ${./atomic-state.mjs} "$out/atomic-state.mjs"
             cp -L ${./request-safety.mjs} "$out/request-safety.mjs"
+            cp -L ${./credentials.mjs} "$out/credentials.mjs"
           '';
           nginxConfig = pkgs.writeText "yattee-web-nginx.conf" ''
             pid nginx.pid;
