@@ -1,5 +1,23 @@
-const CACHE = 'yattee-web-shell-v8';
+const CACHE = 'yattee-web-shell-v9';
 const shell = ['/', '/manifest.webmanifest', '/icon.svg'];
+
+// Only the app shell and Vite's content-hashed build assets are cached.
+// Everything else (sessions, controls, admin views, media relays) carries
+// per-user data and always goes to the network.
+function isStaticAsset(pathname) {
+  return shell.includes(pathname) || pathname.startsWith('/assets/');
+}
+
+// The app routes with the URL hash, so its only page loads are / and
+// /index.html. Other navigations (/upstream-login, /download, ...) are
+// server routes and must reach the network untouched.
+function isAppPage(pathname) {
+  return pathname === '/' || pathname === '/index.html';
+}
+
+function isAppShell(response) {
+  return response.ok && (response.headers.get('content-type') || '').includes('text/html');
+}
 
 async function precacheAppShell(cache) {
   const response = await fetch('/index.html', { cache: 'reload' });
@@ -17,13 +35,14 @@ self.addEventListener('activate', event => event.waitUntil(caches.keys().then(ke
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
-  if (url.origin !== location.origin || url.pathname.startsWith('/api/') || url.pathname.startsWith('/state') || url.pathname.startsWith('/config')) return;
-  if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
+  if (url.origin !== location.origin) return;
+  if (isAppPage(url.pathname)) {
     event.respondWith(caches.match('/index.html').then(cached => {
-      const network = fetch(event.request).then(response => { const copy = response.clone(); caches.open(CACHE).then(cache => cache.put('/index.html', copy)); return response; });
+      const network = fetch(event.request).then(response => { if (isAppShell(response)) { const copy = response.clone(); caches.open(CACHE).then(cache => cache.put('/index.html', copy)); } return response; });
       return cached || network;
     }));
     return;
   }
-  event.respondWith(caches.match(event.request).then(hit => hit || fetch(event.request).then(response => { const copy = response.clone(); caches.open(CACHE).then(cache => cache.put(event.request, copy)); return response; })));
+  if (!isStaticAsset(url.pathname)) return;
+  event.respondWith(caches.match(event.request).then(hit => hit || fetch(event.request).then(response => { if (response.ok) { const copy = response.clone(); caches.open(CACHE).then(cache => cache.put(event.request, copy)); } return response; })));
 });

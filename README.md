@@ -55,3 +55,5 @@ volumes:
 The service listens on port 8080 and stores its state in `/var/lib/yattee-web`.
 
 When Yattee Web is served over HTTPS, set `YATTEE_WEB_SECURE_COOKIES=1` (or `services.yattee-web.secureCookies = true`) to mark its session cookies `Secure`.
+
+The key that encrypts stored upstream sessions defaults to `local-upstream-session.key` in the data directory. To keep it elsewhere, point `YATTEE_WEB_SESSION_KEY_FILE` at a file holding a 32-byte key (raw, hex, or base64), or set `services.yattee-web.sessionKeyFile`, which passes it in as a systemd credential. Changing the key signs out existing browser sessions.

@@ -32,6 +32,17 @@ in
       default = false;
       description = "Whether to mark session cookies `Secure`. Enable when Yattee Web is served over HTTPS.";
     };
+    sessionKeyFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      example = "/run/secrets/yattee-web-session-key";
+      description = ''
+        File holding the 32-byte key (raw, hex, or base64) that encrypts
+        stored upstream sessions. Passed to the service as a systemd
+        credential, so the key doesn't have to live in the data directory.
+        Changing it signs out existing browser sessions.
+      '';
+    };
     openFirewall = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -53,11 +64,13 @@ in
       serviceConfig = {
         ExecStart = lib.getExe cfg.package;
         EnvironmentFile = lib.mkIf (cfg.environmentFile != null) cfg.environmentFile;
+        LoadCredential = lib.mkIf (cfg.sessionKeyFile != null) "session-key:${cfg.sessionKeyFile}";
         DynamicUser = true;
         StateDirectory = "yattee-web";
         StateDirectoryMode = "0700";
         PrivateTmp = true;
         Restart = "always";
+        RestartSec = 5;
         UMask = "0077";
         CapabilityBoundingSet = "";
         AmbientCapabilities = "";

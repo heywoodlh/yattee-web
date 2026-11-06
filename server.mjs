@@ -4,7 +4,7 @@ import http from 'node:http';
 import https from 'node:https';
 import path from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
-import { decryptAuthorization, localSessionLifetimeSeconds, sessionRecord, tokenHash } from './local-upstream-session.mjs';
+import { decryptAuthorization, localSessionLifetimeSeconds, parseSessionKey, sessionRecord, tokenHash } from './local-upstream-session.mjs';
 import { configureControls, defaultControls, enforceControls, publicControls, verifyPin } from './controls.mjs';
 import { createAttemptLimiter } from './credentials.mjs';
 import { adminIdentity, configuredAdmin, proxyAuthorization, shouldForwardUpstreamAuthorization, upgradedAdmin } from './admin-auth.mjs';
@@ -34,7 +34,16 @@ const parseBody = request => new Promise((resolve, reject) => { if (!isJsonReque
 const statePathFor = identity => identity ? path.join(dataDir, 'users', `${createHash('sha256').update(identity).digest('hex')}.json`) : localStatePath;
 const upstreamAuth = request => typeof request.headers.authorization === 'string' && request.headers.authorization.startsWith('Basic ') ? request.headers.authorization : '';
 const cookieValue = (request, name) => new RegExp(`(?:^|;\\s*)${name}=([^;]+)`).exec(String(request.headers.cookie || ''))?.[1] || '';
-async function localSessionKey() { try { const key = await fs.readFile(localSessionKeyPath); if (key.length === 32) return key; } catch {} const key = randomBytes(32); await writeFileAtomic(localSessionKeyPath, key); return key; }
+const externalSessionKeyPath = process.env.YATTEE_WEB_SESSION_KEY_FILE || (process.env.CREDENTIALS_DIRECTORY ? path.join(process.env.CREDENTIALS_DIRECTORY, 'session-key') : '');
+async function externalSessionKey() {
+  if (!externalSessionKeyPath) return null;
+  let raw;
+  try { raw = await fs.readFile(externalSessionKeyPath); } catch (error) { if (error.code === 'ENOENT' && !process.env.YATTEE_WEB_SESSION_KEY_FILE) return null; throw error; }
+  const key = parseSessionKey(raw);
+  if (!key) throw new Error(`${externalSessionKeyPath} must contain a 32-byte key (raw, hex, or base64)`);
+  return key;
+}
+async function localSessionKey() { const external = await externalSessionKey(); if (external) return external; try { const key = await fs.readFile(localSessionKeyPath); if (key.length === 32) return key; } catch {} const key = randomBytes(32); await writeFileAtomic(localSessionKeyPath, key); return key; }
 async function localSessions() { try { const sessions = JSON.parse(await fs.readFile(localSessionsPath, 'utf8')); return Array.isArray(sessions) ? sessions.filter(session => session?.expiresAt > Date.now()) : []; } catch { return []; } }
 async function saveLocalSessions(sessions) { await writeJsonAtomic(localSessionsPath, sessions); }
 async function localSessionAuthorization(request) { const token = cookieValue(request, 'yattee_web_local_session'); if (!token) return ''; const sessions = await localSessions(); const session = sessions.find(item => item.tokenHash === tokenHash(token)); if (!session) return ''; try { return decryptAuthorization(session.authorization, await localSessionKey()); } catch { return ''; } }
@@ -161,6 +170,7 @@ async function streamMedia(request, response) {
   if (request.headers.range) headers.Range = request.headers.range;
   if (target.origin === origin && config.username) headers.authorization = `Basic ${Buffer.from(`${config.username}:${config.password}`).toString('base64')}`;
   const upstream = client.request(target, { method: 'GET', headers }, upstreamResponse => {
+    upstreamResponse.on('error', () => response.destroy());
     const contentType = String(upstreamResponse.headers['content-type'] || '');
     if (!contentType.includes('mpegurl')) { response.writeHead(upstreamResponse.statusCode || 502, mediaResponseHeaders(upstreamResponse.headers)); return upstreamResponse.pipe(response); }
     let playlist = '';
@@ -168,13 +178,20 @@ async function streamMedia(request, response) {
     upstreamResponse.on('data', chunk => playlist += chunk);
     upstreamResponse.on('end', () => {
       const relay = value => `/stream?url=${encodeURIComponent(new URL(value, target).toString())}`;
-      const rewritten = playlist.split('\n').map(line => line.startsWith('#') ? line.replace(/URI="([^"]+)"/g, (_, value) => `URI="${relay(value)}"`) : line ? relay(line) : line).join('\n');
+      let rewritten;
+      try { rewritten = playlist.split('\n').map(line => line.startsWith('#') ? line.replace(/URI="([^"]+)"/g, (_, value) => `URI="${relay(value)}"`) : line ? relay(line) : line).join('\n'); } catch { return send(response, 502, { detail: 'Invalid playlist from upstream' }); }
       const responseHeaders = { ...mediaResponseHeaders(upstreamResponse.headers), 'content-length': Buffer.byteLength(rewritten) };
       response.writeHead(upstreamResponse.statusCode || 502, responseHeaders); response.end(rewritten);
     });
   });
-  upstream.on('error', error => send(response, 502, { detail: error.message }));
+  upstream.on('error', error => failUpstream(response, 502, error.message));
   upstream.end();
+}
+
+// Once a relayed response has started, an upstream error can only end the
+// connection; sending a JSON error then would throw.
+function failUpstream(response, status, detail) {
+  if (response.headersSent) response.destroy(); else send(response, status, { detail });
 }
 
 async function proxy(request, response, configOverride) {
@@ -187,14 +204,19 @@ async function proxy(request, response, configOverride) {
   let controls = config.controls;
   if (remote) { const session = await remoteSession(config, request); if (session.error === 'local-auth') return localAdminChallenge(response); if (session.error === 'auth') return challenge(response, session.challenge); if (session.error) return send(response, 503, { detail: 'The configured upstream Yattee Server is down. Switch to local-only mode in Settings to continue.' }); if (session.localAdmin) return send(response, 403, { detail: 'Yattee Web local admin access is restricted to Settings.' }); await rememberRemoteUser(session); controls = await readProfileControls(config, session.key); }
   const target = upstreamTarget(request.url, remote ? config.instanceUrl : fallback);
-  if (controls.enabled && controls.disableSearch && isSearchPath(target)) return send(response, 403, { detail: 'Search is disabled by parental controls' });
+  if (isSearchPath(target)) {
+    const blocksSearch = value => !!(value?.enabled && value.disableSearch);
+    let profileControls = null;
+    if (!remote) { const session = await remoteSession(config, request); if (session.key) profileControls = await readProfileControls(config, session.key); }
+    if (blocksSearch(controls) || blocksSearch(profileControls)) return send(response, 403, { detail: 'Search is disabled by parental controls' });
+  }
   const client = target.protocol === 'https:' ? https : http;
   const headers = { ...request.headers, host: target.host };
   const cookie = stripOwnCookies(headers.cookie); if (cookie) headers.cookie = cookie; else delete headers.cookie;
   if (!remote) { const authorization = proxyAuthorization(upstreamAuth(request), await localSessionAuthorization(request), localAdmin); delete headers.authorization; if (authorization) headers.authorization = authorization; }
   else if (!shouldForwardUpstreamAuthorization(headers.authorization)) delete headers.authorization;
-  const upstream = client.request(target, { method: request.method, headers }, upstreamResponse => { const responseHeaders = { ...upstreamResponse.headers }; if (!remote) delete responseHeaders['www-authenticate']; response.writeHead(upstreamResponse.statusCode || 502, responseHeaders); upstreamResponse.pipe(response); });
-  upstream.on('error', error => send(response, 503, { detail: `The configured upstream Yattee Server is down: ${error.message}` }));
+  const upstream = client.request(target, { method: request.method, headers }, upstreamResponse => { upstreamResponse.on('error', () => response.destroy()); const responseHeaders = { ...upstreamResponse.headers }; if (!remote) delete responseHeaders['www-authenticate']; response.writeHead(upstreamResponse.statusCode || 502, responseHeaders); upstreamResponse.pipe(response); });
+  upstream.on('error', error => failUpstream(response, 503, `The configured upstream Yattee Server is down: ${error.message}`));
   request.pipe(upstream);
 }
 
@@ -217,7 +239,7 @@ http.createServer(async (request, response) => {
     if (request.url === '/login' && request.method === 'POST') { response.writeHead(204, { 'set-cookie': `yattee_web_remote_signed_out=; ${cookieAttributes}; Max-Age=0` }); return response.end(); }
     if (request.url === '/session' && request.method === 'GET') { const config = await read(); const session = await remoteSession(config, request); if (session.error === 'logged-out') return send(response, 200, { remote: true, loggedOut: true, isAdmin: false, username: '' }); if (session.error === 'local-auth') return localAdminChallenge(response); if (session.error === 'auth') return challenge(response, session.challenge); if (session.error === 'down') return send(response, 200, { remote: true, unavailable: true, isAdmin: false, username: '' }); if (session.error) return send(response, 503, { detail: 'The configured upstream Yattee Server is down.' }); await rememberRemoteUser(session); return send(response, 200, { remote: session.remote, localUpstream: !!session.localUpstream, localAdmin: !!session.localAdmin, isAdmin: session.isAdmin, username: session.username, profile: session.key || 'local' }, session.remote ? { 'set-cookie': remoteProfileCookie(session.key) } : {}); }
     if (request.url === '/controls/verify' && request.method === 'POST') { const config = await read(); const session = await remoteSession(config, request); if (session.error === 'local-auth') return localAdminChallenge(response); if (session.error === 'auth') return challenge(response, session.challenge); if (session.error) return send(response, 503, { detail: 'The configured upstream Yattee Server is down.' }); const input = await parseBody(request); const controls = await readProfileControls(config, session.key); return checkPin(controls, input.currentPin, session.key || 'global') ? send(response, 200, { ok: true }) : send(response, 403, { detail: 'PIN required' }); }
-    if (request.url === '/controls' || request.url.startsWith('/controls?')) { const config = await read(); const session = await remoteSession(config, request); if (session.error === 'local-auth') return localAdminChallenge(response); if (session.error === 'auth') return challenge(response, session.challenge); if (session.error) return send(response, 503, { detail: 'The configured upstream Yattee Server is down.' }); await rememberRemoteUser(session); const target = new URL(request.url, 'http://localhost').searchParams.get('user') || session.key; if (target !== session.key && !isProfileKey(target)) return send(response, 400, { detail: 'Invalid user' }); if (target !== session.key && !session.isAdmin) return send(response, 403, { detail: 'Admin permission required' }); const existing = await readProfileControls(config, target); if (request.method === 'GET') return send(response, 200, { controls: publicControls(existing), user: target }); if (request.method === 'PUT') { if (!session.key && !session.localAdmin) return localAdminChallenge(response); const input = await parseBody(request); if (!session.isAdmin && existing.enabled && !checkPin(existing, input.currentPin, target || 'global')) return send(response, 403, { detail: 'PIN required to change settings' }); const controls = configureControls(existing, input.controls || {}); if (session.key) await saveProfileControls(target, controls); else await save({ controls, currentPin: input.currentPin }, { localAdmin: true }); return send(response, 200, { controls: publicControls(controls), user: target }); } return send(response, 405, { detail: 'Method not allowed' }); }
+    if (request.url === '/controls' || request.url.startsWith('/controls?')) { const config = await read(); const session = await remoteSession(config, request); if (session.error === 'local-auth') return localAdminChallenge(response); if (session.error === 'auth') return challenge(response, session.challenge); if (session.error) return send(response, 503, { detail: 'The configured upstream Yattee Server is down.' }); await rememberRemoteUser(session); const target = new URL(request.url, 'http://localhost').searchParams.get('user') || session.key; if (target !== session.key && !isProfileKey(target)) return send(response, 400, { detail: 'Invalid user' }); if (target !== session.key && !session.isAdmin) return send(response, 403, { detail: 'Admin permission required' }); const existing = await readProfileControls(config, target); if (request.method === 'GET') return send(response, 200, { controls: publicControls(existing), user: target }); if (request.method === 'PUT') { if (!target && !session.localAdmin) return localAdminChallenge(response); const input = await parseBody(request); if (!session.isAdmin && existing.enabled && !checkPin(existing, input.currentPin, target || 'global')) return send(response, 403, { detail: 'PIN required to change settings' }); const controls = configureControls(existing, input.controls || {}); if (target) await saveProfileControls(target, controls); else await save({ controls, currentPin: input.currentPin }, { localAdmin: true }); return send(response, 200, { controls: publicControls(controls), user: target }); } return send(response, 405, { detail: 'Method not allowed' }); }
     if (request.url === '/web-admin/users' && request.method === 'GET') { const config = await read(); const session = await remoteSession(config, request); if (session.error === 'local-auth') return localAdminChallenge(response); if (session.error === 'auth') return challenge(response, session.challenge); if (!session.isAdmin) return send(response, 403, { detail: 'Admin permission required' }); return send(response, 200, { users: await rememberedUsers() }); }
     if (request.url.startsWith('/web-admin/history?') && request.method === 'GET') { const config = await read(); const session = await remoteSession(config, request); if (session.error === 'local-auth') return localAdminChallenge(response); if (session.error === 'auth') return challenge(response, session.challenge); if (!session.isAdmin) return send(response, 403, { detail: 'Admin permission required' }); const user = new URL(request.url, 'http://localhost').searchParams.get('user'); const users = await rememberedUsers(); if (!user || !users.some(entry => entry.id === user)) return send(response, 404, { detail: 'Logged-in user not found' }); return send(response, 200, { history: (await readState(user)).history || [] }); }
     if (request.url === '/subscriptions/import' && request.method === 'POST') { const config = await read(); const session = await remoteSession(config, request); if (session.error === 'local-auth') return localAdminChallenge(response); if (session.error === 'auth') return challenge(response, session.challenge); if (session.error) return send(response, 503, { detail: 'The configured upstream Yattee Server is down.' }); const controls = await readProfileControls(config, session.key); if (controls.enabled && controls.disableSubscriptionImport) return send(response, 403, { detail: 'Subscription importing is disabled by parental controls' }); const input = await parseBody(request); if (controls.enabled && !session.isAdmin && !checkPin(controls, input.currentPin, session.key || 'global')) return send(response, 403, { detail: 'PIN required' }); const channels = Array.isArray(input.channels) ? input.channels : []; if (channels.length > 5000 || channels.some(channel => !channel || typeof channel.authorId !== 'string' || !/^UC[\w-]{3,}$/.test(channel.authorId) || typeof channel.author !== 'string' || channel.author.length > 200)) return send(response, 400, { detail: 'Invalid subscription import' }); const state = await readState(session.key); const unique = new Map(channels.map(channel => [channel.authorId, { authorId: channel.authorId, author: channel.author, authorThumbnails: [] }])); for (const channel of state.subscriptions || []) if (!unique.has(channel.authorId)) unique.set(channel.authorId, channel); const saved = await saveState({ ...state, subscriptions: [...unique.values()] }, session.key); return send(response, 200, { subscriptions: saved.subscriptions }); }

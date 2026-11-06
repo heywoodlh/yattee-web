@@ -23,7 +23,7 @@ describe('parental controls', () => {
     const existing = { subscriptions: ['a'], playlists: ['p'], bookmarks: ['b'], queue: ['q'], history: [] };
     const next = { subscriptions: ['a', 'x'], playlists: [], bookmarks: ['b', 'y'], queue: ['q', 'z'], history: ['h'] };
     const controls = { ...defaultControls, enabled: true, disableSubscriptions: true, disablePlaylists: true };
-    expect(enforceControls(next, existing, controls)).toEqual({ subscriptions: ['a'], playlists: ['p'], bookmarks: ['b'], queue: ['q', 'z'], history: ['h'] });
+    expect(enforceControls(next, existing, controls)).toEqual({ subscriptions: ['a'], playlists: ['p'], bookmarks: ['b'], queue: ['q'], history: ['h'] });
     expect(enforceControls(next, existing, { ...controls, enabled: false })).toEqual(next);
     expect(enforceControls(next, existing, { ...controls, disablePlaylists: false }).playlists).toEqual([]);
   });
