@@ -11,7 +11,7 @@ describe('loadStore', () => {
     expect(store.history).toEqual([]);
     expect(store.bookmarks).toEqual([]);
     expect(store.subscriptions).toEqual([]);
-    expect(store.settings).toEqual({ autoplay: true, speed: 1, quality: 'auto', instanceUrl: '', theme: 'default' });
+    expect(store.settings).toEqual(initialStore.settings);
   });
 
   it('restores a filesystem-backed feed cache but rejects malformed cache contents', () => {

@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 describe('PWA shell cache', () => {
   it('precaches the hashed app assets referenced by the current HTML shell', () => {
     const worker = readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
-    expect(worker).toContain("const CACHE = 'yattee-web-shell-v9'");
+    expect(worker).toContain("const CACHE = 'yattee-web-shell-v10'");
     expect(worker).toContain('precacheAppShell');
     expect(worker).toContain('matchAll(/<(?:script|link)');
   });

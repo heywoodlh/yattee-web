@@ -11,6 +11,7 @@ import { adminIdentity, configuredAdmin, proxyAuthorization, shouldForwardUpstre
 import { profileKey } from './profile-key.mjs';
 import { writeFileAtomic, writeJsonAtomic } from './atomic-state.mjs';
 import { isCrossSiteWrite, isJsonRequest, isProfileKey, isSearchPath, mediaResponseHeaders, mediaTarget, stripOwnCookies, upstreamTarget } from './request-safety.mjs';
+import { createSponsorSegmentService, normalizeServerSponsorSettings, sponsorVideoID } from './sponsorblock-server.mjs';
 
 const dataDir = process.env.YATTEE_WEB_DATA_DIR || '/data';
 const configPath = path.join(dataDir, 'server.json');
@@ -21,7 +22,7 @@ const localSessionKeyPath = path.join(dataDir, 'local-upstream-session.key');
 const localSessionsPath = path.join(dataDir, 'local-upstream-sessions.json');
 const fallback = process.env.YATTEE_SERVER_URL || 'http://yattee.default.svc.cluster.local:80';
 const defaults = { instanceUrl: '', controls: defaultControls };
-const stateDefaults = { history: [], bookmarks: [], subscriptions: [], playlists: [], queue: [], settings: { autoplay: true, speed: 1, quality: 'auto', instanceUrl: '', theme: 'default' }, searchHistory: [], recentChannels: [], recentPlaylists: [], instances: [], mediaSources: [], channelNotificationSettings: [], controlsPresets: [], feedCache: { videos: [] } };
+const stateDefaults = { history: [], bookmarks: [], subscriptions: [], playlists: [], queue: [], settings: { autoplay: true, speed: 1, quality: 'auto', instanceUrl: '', theme: 'default', sponsorBlock: normalizeServerSponsorSettings(null) }, searchHistory: [], recentChannels: [], recentPlaylists: [], instances: [], mediaSources: [], channelNotificationSettings: [], controlsPresets: [], feedCache: { videos: [] } };
 
 const read = async () => { try { const saved = JSON.parse(await fs.readFile(configPath, 'utf8')); return { ...defaults, ...saved, controls: { ...defaultControls, ...(saved.controls || {}) } }; } catch { return defaults; } };
 let localAdmin = null;
@@ -55,8 +56,9 @@ const remoteProfileCookie = key => `yattee_web_remote_profile=${key}; ${cookieAt
 const offlineRemoteProfile = request => { const key = cookieValue(request, 'yattee_web_remote_profile'); return isProfileKey(key) ? key : ''; };
 const isRemoteSignedOut = request => /(?:^|;\s*)yattee_web_remote_signed_out=1(?:;|$)/.test(String(request.headers.cookie || ''));
 const challenge = (response, upstreamChallenge) => send(response, 401, { detail: 'Remote Yattee Server authentication required' }, { 'www-authenticate': hasBasicChallenge(upstreamChallenge) ? upstreamChallenge : 'Basic realm="Yattee Server"' });
-const readState = async identity => { try { const value = JSON.parse(await fs.readFile(statePathFor(identity), 'utf8')); return value && typeof value === 'object' && !Array.isArray(value) ? { ...stateDefaults, ...value, settings: { ...stateDefaults.settings, ...(value.settings || {}) } } : stateDefaults; } catch { return stateDefaults; } };
-const saveState = async (input, identity) => { if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Invalid state'); const statePath = statePathFor(identity); const next = { ...stateDefaults, ...input, settings: { ...stateDefaults.settings, ...(input.settings || {}) } }; await writeJsonAtomic(statePath, next); return next; };
+const normalizedSettings = settings => ({ ...stateDefaults.settings, ...(settings || {}), sponsorBlock: normalizeServerSponsorSettings(settings?.sponsorBlock) });
+const readState = async identity => { try { const value = JSON.parse(await fs.readFile(statePathFor(identity), 'utf8')); return value && typeof value === 'object' && !Array.isArray(value) ? { ...stateDefaults, ...value, settings: normalizedSettings(value.settings) } : stateDefaults; } catch { return stateDefaults; } };
+const saveState = async (input, identity) => { if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Invalid state'); const statePath = statePathFor(identity); const next = { ...stateDefaults, ...input, settings: normalizedSettings(input.settings) }; await writeJsonAtomic(statePath, next); return next; };
 const pinFailures = createAttemptLimiter();
 function checkPin(controls, pin, scope) {
   if (!pin) return false;
@@ -227,10 +229,18 @@ async function saveControlledState(config, input, key, isAdmin) {
 
 async function sessionFailure(response, session) { return session.error === 'local-auth' ? localAdminChallenge(response) : challenge(response); }
 
+const sponsorSegments = createSponsorSegmentService();
 await initializeLocalAdmin();
 http.createServer(async (request, response) => {
   try {
     if (isCrossSiteWrite(request.method, request.headers)) return send(response, 403, { detail: 'Cross-site request blocked' });
+    if (request.url?.split('?')[0] === '/api/sponsorblock') {
+      if (request.method !== 'GET') return send(response, 405, { detail: 'Method not allowed' });
+      const videoID = new URL(request.url, 'http://localhost').searchParams.get('videoID');
+      if (!sponsorVideoID(videoID)) return send(response, 400, { detail: 'Invalid video ID' });
+      try { return send(response, 200, { segments: await sponsorSegments(videoID) }, { 'cache-control': 'private, max-age=300' }); }
+      catch (error) { return send(response, error?.message === 'SponsorBlock rate limit exceeded' ? 429 : 502, { detail: error?.message === 'SponsorBlock rate limit exceeded' ? 'SponsorBlock rate limit exceeded' : 'SponsorBlock is unavailable' }); }
+    }
     if (request.url === '/local-admin/status' && request.method === 'GET') return send(response, 200, { configured: !!localAdmin?.passwordHash });
     if (request.url === '/local-admin/setup' && request.method === 'POST') { if (localAdmin?.passwordHash) return send(response, 409, { detail: 'Yattee Web admin password is already configured' }); const input = await parseBody(request); await writeLocalAdmin(configuredAdmin(input.password)); return send(response, 201, { configured: true }); }
     if (request.url === '/local-admin/session' && request.method === 'GET') { if (!localAdmin?.passwordHash) return send(response, 409, { detail: 'Yattee Web admin password has not been configured' }); return localAdminStatus(request).authenticated ? send(response, 200, { authenticated: true, username: 'admin' }) : localAdminChallenge(response); }

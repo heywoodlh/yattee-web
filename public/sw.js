@@ -1,4 +1,4 @@
-const CACHE = 'yattee-web-shell-v9';
+const CACHE = 'yattee-web-shell-v10';
 const shell = ['/', '/manifest.webmanifest', '/icon.svg'];
 
 // Only the app shell and Vite's content-hashed build assets are cached.

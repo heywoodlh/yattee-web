@@ -4,13 +4,25 @@ export type Video = { type?: string; videoId: string; title: string; author: str
 export type Channel = { authorId: string; author: string; description?: string; subCount?: number; authorThumbnails?: { url: string }[]; originalUrl?: string; authorUrl?: string; channelUrl?: string };
 export type Playlist = { playlistId: string; title: string; author?: string; videoCount?: number; playlistThumbnail?: string; videos?: Video[] };
 export type Theme = 'default' | 'light' | 'nord' | 'catppuccin-mocha' | 'solarized' | 'dracula';
+export const sponsorCategories = ['sponsor', 'selfpromo', 'interaction', 'intro', 'outro', 'preview', 'music_offtopic', 'filler'] as const;
+export type SponsorCategory = typeof sponsorCategories[number];
+export type SponsorSettings = { enabled: boolean; autoSkip: boolean; categories: SponsorCategory[] };
+export const defaultSponsorSettings: SponsorSettings = { enabled: true, autoSkip: true, categories: ['sponsor', 'selfpromo', 'interaction', 'intro', 'outro'] };
+export function normalizeSponsorSettings(value: unknown): SponsorSettings {
+  const saved = value && typeof value === 'object' && !Array.isArray(value) ? value as Partial<SponsorSettings> : {};
+  return {
+    enabled: typeof saved.enabled === 'boolean' ? saved.enabled : defaultSponsorSettings.enabled,
+    autoSkip: typeof saved.autoSkip === 'boolean' ? saved.autoSkip : defaultSponsorSettings.autoSkip,
+    categories: Array.isArray(saved.categories) ? sponsorCategories.filter(category => saved.categories?.includes(category)) : [...defaultSponsorSettings.categories],
+  };
+}
 export type Store = {
   history: Video[];
   bookmarks: Video[];
   subscriptions: Channel[];
   playlists: { id: string; name: string; videos: Video[] }[];
   queue: Video[];
-  settings: { autoplay: boolean; speed: number; quality: string; instanceUrl: string; theme: Theme };
+  settings: { autoplay: boolean; speed: number; quality: string; instanceUrl: string; theme: Theme; sponsorBlock: SponsorSettings };
   searchHistory: string[];
   recentChannels: Channel[];
   recentPlaylists: { playlistId: string; title: string }[];
@@ -23,7 +35,7 @@ export type Store = {
 
 export const initialStore: Store = {
   history: [], bookmarks: [], subscriptions: [], playlists: [], queue: [],
-  settings: { autoplay: true, speed: 1, quality: 'auto', instanceUrl: '', theme: 'default' },
+  settings: { autoplay: true, speed: 1, quality: 'auto', instanceUrl: '', theme: 'default', sponsorBlock: defaultSponsorSettings },
   searchHistory: [], recentChannels: [], recentPlaylists: [], instances: [], mediaSources: [],
   channelNotificationSettings: [], controlsPresets: [], feedCache: { videos: [] },
 };
@@ -49,7 +61,7 @@ export function loadStore(raw: string | null): Store {
       playlists: localPlaylists(saved.playlists),
       queue: array<Video>(saved.queue),
       feedCache: saved.feedCache && typeof saved.feedCache === 'object' && !Array.isArray(saved.feedCache) ? { videos: array<Video>((saved.feedCache as FeedCache).videos), updatedAt: typeof (saved.feedCache as FeedCache).updatedAt === 'string' ? (saved.feedCache as FeedCache).updatedAt : undefined } : initialStore.feedCache,
-      settings: { ...initialStore.settings, ...settings },
+      settings: { ...initialStore.settings, ...settings, sponsorBlock: normalizeSponsorSettings((settings as Partial<Store['settings']>).sponsorBlock) },
     };
   } catch {
     return initialStore;
