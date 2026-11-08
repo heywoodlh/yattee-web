@@ -8,9 +8,10 @@ export function activeSkipSegment(time: number, segments: SponsorSegment[], sett
 export function shouldAutoSkip(segment: SponsorSegment, settings: SponsorSettings, lastSkippedID: string | null): boolean {
   return settings.enabled && settings.autoSkip && settings.categories.includes(segment.category) && segment.id !== lastSkippedID;
 }
-export function skipTarget(segment: SponsorSegment, duration: number): number | null {
+// A segment that runs to the end of the video (typically an outro) skips to the end.
+export function skipTarget(segment: SponsorSegment, duration: number): number {
   const target = segment.end + 0.1;
-  return Number.isFinite(duration) && duration > 0 && target >= duration ? null : target;
+  return Number.isFinite(duration) && duration > 0 && target >= duration ? duration : target;
 }
 export async function fetchSponsorSegments(videoID: string, signal?: AbortSignal, fetcher: typeof fetch = fetch): Promise<SponsorSegment[]> {
   const response = await fetcher(`/api/sponsorblock?videoID=${encodeURIComponent(videoID)}`, { signal });

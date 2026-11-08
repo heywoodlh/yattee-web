@@ -26,9 +26,11 @@ describe('SponsorBlock playback', () => {
     expect(shouldAutoSkip(segment, settings, segment.id)).toBe(false);
     expect(shouldAutoSkip(segment, { ...settings, autoSkip: false }, null)).toBe(false);
   });
-  it('clamps the seek target to video duration and refuses end-of-video loops', () => {
+  it('seeks just past the segment, or to the end when the segment runs to the end of the video', () => {
     expect(skipTarget(segment, 100)).toBe(20.1);
-    expect(skipTarget(segment, 20)).toBeNull();
+    expect(skipTarget(segment, 20)).toBe(20);
+    expect(skipTarget(segment, 19.5)).toBe(19.5);
+    expect(skipTarget(segment, Number.NaN)).toBe(20.1);
   });
   it('distinguishes a missing video from an unavailable segment service', async () => {
     const fetcher = async () => new Response(JSON.stringify({ segments: [segment] }), { status: 200 });

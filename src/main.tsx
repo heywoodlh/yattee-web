@@ -249,7 +249,6 @@ function Player({ video, store, update, navigate, save, queue, notify, markWatch
     const player = playerRef.current;
     if (!player) return;
     const target = skipTarget(segment, player.duration);
-    if (target === null) return;
     lastSponsorID.current = segment.id;
     player.currentTime = target;
     if (audioRef.current) audioRef.current.currentTime = target;
@@ -259,7 +258,9 @@ function Player({ video, store, update, navigate, save, queue, notify, markWatch
   const checkSponsor = (time: number, segments = sponsorSegments) => {
     const segment = activeSkipSegment(time, segments, store.settings.sponsorBlock);
     if (!segment) lastSponsorID.current = null;
-    setActiveSponsor(segment);
+    // Hide the manual button for a segment that was just skipped (e.g. an outro
+    // whose end lies past the media's real duration).
+    setActiveSponsor(segment && segment.id !== lastSponsorID.current ? segment : null);
     if (segment && shouldAutoSkip(segment, store.settings.sponsorBlock, lastSponsorID.current)) skipSponsor(segment);
   };
   useEffect(() => {
