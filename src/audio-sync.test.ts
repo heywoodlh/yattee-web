@@ -53,7 +53,9 @@ describe('attachAudioSync', () => {
     expect(audio.paused).toBe(true);
     expect(audio.currentTime).toBe(90);
     video.seeking = false; video.currentTime = 90.1; video.emit('seeked');
-    expect(audio.currentTime).toBe(90.1);
+    expect(audio.currentTime).toBe(90); // within tolerance: no second seek
+    video.currentTime = 91; video.emit('seeked');
+    expect(audio.currentTime).toBe(91);
     expect(audio.paused).toBe(false);
   });
 
@@ -101,5 +103,69 @@ describe('attachAudioSync', () => {
     detach();
     video.paused = false; video.emit('playing');
     expect(audio.paused).toBe(true);
+  });
+});
+
+// Closer to real elements: play()/pause() fire their events asynchronously, and
+// seeking the audio while it plays drops its buffer (waiting, then playing).
+class BrowserLikeMedia extends EventTarget {
+  #time = 0;
+  seeks = 0;
+  paused = true;
+  seeking = false;
+  playbackRate = 1;
+  volume = 1;
+  muted = false;
+  constructor(private readonly dropsBufferOnSeek = false) { super(); }
+  get currentTime() { return this.#time; }
+  set currentTime(value: number) {
+    this.#time = value; this.seeks += 1;
+    if (this.dropsBufferOnSeek && !this.paused) { this.later('waiting'); this.later('playing'); }
+  }
+  play() { const wasPaused = this.paused; this.paused = false; if (wasPaused) { this.later('play'); this.later('playing'); } return Promise.resolve(); }
+  pause() { if (!this.paused) { this.paused = true; this.later('pause'); } }
+  events = 0;
+  later(type: string) { if (++this.events > 200) return; queueMicrotask(() => this.dispatchEvent(new Event(type))); }
+}
+
+describe('attachAudioSync with browser-like elements', () => {
+  it('keeps playing after the user presses play instead of pausing itself', async () => {
+    const video = new BrowserLikeMedia();
+    const audio = new BrowserLikeMedia(true);
+    attachAudioSync(video, audio);
+    video.currentTime = 12.3; // resume position, before playback starts
+    audio.seeks = 0;
+    video.play();
+    for (let i = 0; i < 50; i++) await Promise.resolve();
+    expect(video.paused).toBe(false);
+    expect(audio.paused).toBe(false);
+    expect(audio.seeks).toBeLessThanOrEqual(1);
+    expect(video.events + audio.events).toBeLessThan(20);
+  });
+});
+
+describe('attachAudioSync never traps the video paused', () => {
+  it('stops holding once the user presses play during an audio stall', () => {
+    const { video, audio } = setup();
+    video.paused = false; video.emit('playing');
+    audio.emit('waiting');
+    expect(video.paused).toBe(true);
+    video.paused = false; video.emit('play'); // user insists
+    audio.emit('waiting');
+    expect(video.paused).toBe(false);
+    audio.emit('playing'); // audio recovers: holding works again later
+    audio.emit('waiting');
+    expect(video.paused).toBe(true);
+  });
+
+  it('resumes the video if the audio track fails to load', () => {
+    const { video, audio } = setup();
+    video.paused = false; video.emit('playing');
+    audio.emit('waiting');
+    expect(video.paused).toBe(true);
+    audio.emit('error');
+    expect(video.paused).toBe(false);
+    audio.emit('waiting');
+    expect(video.paused).toBe(false);
   });
 });
