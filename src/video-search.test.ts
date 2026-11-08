@@ -37,4 +37,9 @@ describe('video search', () => {
     expect(parseSearchRoute('search/Aster%20%26%20friends')).toEqual({ filter: 'all', query: 'Aster & friends' });
     expect(parseSearchRoute('search')).toEqual({ filter: 'all', query: '' });
   });
+
+  it('does not throw on malformed percent-encoding in a search route', () => {
+    expect(() => parseSearchRoute('search/videos/%E0%A4%A')).not.toThrow();
+    expect(parseSearchRoute('search/videos/%E0%A4%A')).toEqual({ filter: 'videos', query: '%E0%A4%A' });
+  });
 });

@@ -18,7 +18,10 @@ export function searchRoute(query: string, filter: SearchFilter): string {
 export function parseSearchRoute(route: string): { filter: SearchFilter; query: string } {
   const [, segment, ...rest] = route.split('/');
   const filter = searchFilters.find(option => option.value === segment)?.value;
-  return { filter: filter || 'all', query: decodeURIComponent((filter ? rest : [segment, ...rest]).filter(Boolean).join('/')) };
+  const raw = (filter ? rest : [segment, ...rest]).filter(Boolean).join('/');
+  let query = raw;
+  try { query = decodeURIComponent(raw); } catch { /* keep malformed input as typed */ }
+  return { filter: filter || 'all', query };
 }
 export function visibleSearchResults(results: (Video | Channel | Playlist)[], filter: SearchFilter) {
   if (filter === 'all') return results;
