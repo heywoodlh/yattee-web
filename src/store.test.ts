@@ -25,3 +25,12 @@ describe('loadStore', () => {
     expect(loadStore(JSON.stringify({ playlists: [{ id: 'legacy', name: 'Old playlist' }] })).playlists).toEqual([{ id: 'legacy', name: 'Old playlist', videos: [] }]);
   });
 });
+
+describe('audio language setting', () => {
+  it('defaults to the original track and drops malformed saved values', () => {
+    expect(initialStore.settings.audioLanguage).toBe('original');
+    expect(loadStore('{}').settings.audioLanguage).toBe('original');
+    expect(loadStore(JSON.stringify({ settings: { audioLanguage: 'ja' } })).settings.audioLanguage).toBe('ja');
+    expect(loadStore(JSON.stringify({ settings: { audioLanguage: 'javascript:alert(1)' } })).settings.audioLanguage).toBe('original');
+  });
+});
