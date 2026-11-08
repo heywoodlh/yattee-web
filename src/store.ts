@@ -1,3 +1,4 @@
+import { normalizeAudioLanguage } from './stream';
 import type { FeedCache } from './feed-cache';
 
 export type Video = { type?: string; videoId: string; title: string; author: string; authorId: string; lengthSeconds?: number; liveNow?: boolean; viewCount?: number; publishedText?: string; videoThumbnails?: { url: string }[]; videoUrl?: string; originalUrl?: string; resume?: number; paused?: boolean; watched?: boolean };
@@ -22,7 +23,7 @@ export type Store = {
   subscriptions: Channel[];
   playlists: { id: string; name: string; videos: Video[] }[];
   queue: Video[];
-  settings: { autoplay: boolean; speed: number; quality: string; instanceUrl: string; theme: Theme; sponsorBlock: SponsorSettings };
+  settings: { autoplay: boolean; speed: number; quality: string; instanceUrl: string; theme: Theme; sponsorBlock: SponsorSettings; audioLanguage: string };
   searchHistory: string[];
   recentChannels: Channel[];
   recentPlaylists: { playlistId: string; title: string }[];
@@ -35,7 +36,7 @@ export type Store = {
 
 export const initialStore: Store = {
   history: [], bookmarks: [], subscriptions: [], playlists: [], queue: [],
-  settings: { autoplay: true, speed: 1, quality: 'auto', instanceUrl: '', theme: 'default', sponsorBlock: defaultSponsorSettings },
+  settings: { autoplay: true, speed: 1, quality: 'auto', instanceUrl: '', theme: 'default', sponsorBlock: defaultSponsorSettings, audioLanguage: 'original' },
   searchHistory: [], recentChannels: [], recentPlaylists: [], instances: [], mediaSources: [],
   channelNotificationSettings: [], controlsPresets: [], feedCache: { videos: [] },
 };
@@ -61,7 +62,7 @@ export function loadStore(raw: string | null): Store {
       playlists: localPlaylists(saved.playlists),
       queue: array<Video>(saved.queue),
       feedCache: saved.feedCache && typeof saved.feedCache === 'object' && !Array.isArray(saved.feedCache) ? { videos: array<Video>((saved.feedCache as FeedCache).videos), updatedAt: typeof (saved.feedCache as FeedCache).updatedAt === 'string' ? (saved.feedCache as FeedCache).updatedAt : undefined } : initialStore.feedCache,
-      settings: { ...initialStore.settings, ...settings, sponsorBlock: normalizeSponsorSettings((settings as Partial<Store['settings']>).sponsorBlock) },
+      settings: { ...initialStore.settings, ...settings, sponsorBlock: normalizeSponsorSettings((settings as Partial<Store['settings']>).sponsorBlock), audioLanguage: normalizeAudioLanguage((settings as Partial<Store['settings']>).audioLanguage) },
     };
   } catch {
     return initialStore;

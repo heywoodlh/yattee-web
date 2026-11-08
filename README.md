@@ -8,6 +8,8 @@ Search defaults to mixed video, channel, and playlist results. Use the All, Vide
 
 SponsorBlock is available for YouTube videos, with the same five categories enabled by default as the Yattee iOS client. Manage automatic skipping and categories in **Settings → SponsorBlock**. When automatic skipping is off, use the player’s **Skip segment** button. Segments are fetched through a fixed-origin relay to `https://sponsor.ajay.app`; playback continues when that service is unavailable. Upstream Yattee Server credentials are never forwarded to SponsorBlock.
 
+Videos with dubbed audio tracks now play the original-language track by default. Choose a preferred language in **Settings → Audio language**, or switch tracks from the player's **Audio** menu. When a video has several audio languages, **Auto** quality plays adaptive video (up to 1080p) with the chosen track, because HLS and muxed streams don't say which language they carry.
+
 # Docker
 
 ```yaml

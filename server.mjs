@@ -22,7 +22,7 @@ const localSessionKeyPath = path.join(dataDir, 'local-upstream-session.key');
 const localSessionsPath = path.join(dataDir, 'local-upstream-sessions.json');
 const fallback = process.env.YATTEE_SERVER_URL || 'http://yattee.default.svc.cluster.local:80';
 const defaults = { instanceUrl: '', controls: defaultControls };
-const stateDefaults = { history: [], bookmarks: [], subscriptions: [], playlists: [], queue: [], settings: { autoplay: true, speed: 1, quality: 'auto', instanceUrl: '', theme: 'default', sponsorBlock: normalizeServerSponsorSettings(null) }, searchHistory: [], recentChannels: [], recentPlaylists: [], instances: [], mediaSources: [], channelNotificationSettings: [], controlsPresets: [], feedCache: { videos: [] } };
+const stateDefaults = { history: [], bookmarks: [], subscriptions: [], playlists: [], queue: [], settings: { autoplay: true, speed: 1, quality: 'auto', instanceUrl: '', theme: 'default', sponsorBlock: normalizeServerSponsorSettings(null), audioLanguage: 'original' }, searchHistory: [], recentChannels: [], recentPlaylists: [], instances: [], mediaSources: [], channelNotificationSettings: [], controlsPresets: [], feedCache: { videos: [] } };
 
 const read = async () => { try { const saved = JSON.parse(await fs.readFile(configPath, 'utf8')); return { ...defaults, ...saved, controls: { ...defaultControls, ...(saved.controls || {}) } }; } catch { return defaults; } };
 let localAdmin = null;
